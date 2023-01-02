@@ -1,9 +1,9 @@
 <?php
 /**
- * @version    2.10.x
+ * @version    2.11.x
  * @package    K2
  * @author     JoomlaWorks https://www.joomlaworks.net
- * @copyright  Copyright (c) 2006 - 2020 JoomlaWorks Ltd. All rights reserved.
+ * @copyright  Copyright (c) 2006 - 2021 JoomlaWorks Ltd. All rights reserved.
  * @license    GNU/GPL license: https://www.gnu.org/copyleft/gpl.html
  */
 
@@ -279,8 +279,7 @@ class K2ViewItemlist extends K2View
                 case 'tag':
                     // Prevent spammers from using the tag view
                     $tag = JRequest::getString('tag');
-                    //$db->setQuery('SELECT id, name FROM #__k2_tags WHERE name = '.$db->quote($tag));
-					$db->setQuery('SELECT id, name, tag_desc FROM #__k2_tags WHERE name = '.$db->quote($tag));
+                    $db->setQuery('SELECT id, name, tag_desc FROM #__k2_tags WHERE name = '.$db->quote($tag));
                     $tag = $db->loadObject();
                     if (!$tag || !$tag->id) {
                         jimport('joomla.filesystem.file');
@@ -296,8 +295,12 @@ class K2ViewItemlist extends K2View
                         }
 
                         if (!$tag || !$tag->id) {
-                            JError::raiseError(404, JText::_('K2_NOT_FOUND'));
-                            return false;
+                            if ($document->getType() == 'feed' || $document->getType() == 'json') {
+                                $app->redirect(JUri::root());
+                            } else {
+                                JError::raiseError(410, JText::_('K2_NOT_FOUND'));
+                                return false;
+                            }
                         }
                     }
 
@@ -312,8 +315,9 @@ class K2ViewItemlist extends K2View
 
                     // Set title
                     $this->assignRef('name', $tag->name);
-					$title = $tag->name;
+                    $title = $tag->name;
 					$tag_desc = $tag->tag_desc;
+					
                     $page_title = $params->get('page_title');
                     if ($this->menuItemMatchesK2Entity('itemlist', 'tag', $tag->name) && !empty($page_title)) {
                         $title = $params->get('page_title');
@@ -624,7 +628,7 @@ class K2ViewItemlist extends K2View
                 $feedItem->link = $item->link;
                 $feedItem->title = $item->title;
                 $feedItem->description = $item->description;
-                $feedItem->date = $item->created;
+                $feedItem->date = (isset($ordering) && $ordering == 'modified') ? $item->modified : $item->created;
                 $feedItem->category = $item->category->name;
                 $feedItem->author = $item->author->name;
                 if ($params->get('feedBogusEmail')) {
@@ -743,10 +747,10 @@ class K2ViewItemlist extends K2View
 
         // Pathway
         $pathway = $app->getPathWay();
-        if (!isset($menuActive->query['task'])) {
-            $menuActive->query['task'] = '';
-        }
-        if ($menuActive) {
+        if (!empty($menuActive)) {
+            if (!isset($menuActive->query['task'])) {
+                $menuActive->query['task'] = '';
+            }
             switch ($task) {
                 case 'category':
                     if ($menuActive->query['task'] != 'category' || $menuActive->query['id'] != JRequest::getInt('id')) {
@@ -894,7 +898,7 @@ class K2ViewItemlist extends K2View
                     if (!empty($category->image) && strpos($category->image, 'placeholder/category.png') === false) {
                         $metaImage = substr(JURI::root(), 0, -1).str_replace(JURI::root(true), '', $category->image);
                     }
-
+		   
                     // Set Facebook meta tags
                     if ($params->get('facebookMetatags', 1)) {
                         $document->setMetaData('og:url', $currentAbsoluteUrl);
@@ -997,7 +1001,7 @@ class K2ViewItemlist extends K2View
                     }
 
                     $document->setMetadata('robots', $metaRobots);
-
+		    $metaDesc = $tag->tag_desc;		
                     // Set Facebook meta tags
                     if ($params->get('facebookMetatags', 1)) {
                         $document->setMetaData('og:url', $currentAbsoluteUrl);
@@ -1213,7 +1217,7 @@ class K2ViewItemlist extends K2View
                         }
                     }
 
-                    $metaTitle = trim($params->get('page_title'));
+                    $metaTitle = trim(preg_replace('/[^\p{L}\p{N}\s\-_]/u', '', html_entity_decode($params->get('page_title'))));
                     $document->setTitle($metaTitle);
 
                     // Set meta description
