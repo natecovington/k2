@@ -1,5 +1,5 @@
 Modified for use with K2 tag descriptions by Nate Covington
-https://www.covingtoncreations.com/blog/joomla-k2-customization-adding-descriptions-to-tags
+[Details](https://www.covingtoncreations.com/blog/joomla-k2-customization-adding-descriptions-to-tags)
 
 
 
