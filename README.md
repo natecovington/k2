@@ -1,3 +1,10 @@
+Modified for use with K2 tag descriptions by Nate Covington
+https://www.covingtoncreations.com/blog/joomla-k2-customization-adding-descriptions-to-tags
+
+
+
+
+
 ![K2](https://getk2.org/downloads/logo/k2_logo.png)
 ***
 
