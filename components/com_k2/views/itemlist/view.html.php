@@ -1,9 +1,9 @@
 <?php
 /**
- * @version    2.11.x
+ * @version    2.10.x
  * @package    K2
  * @author     JoomlaWorks https://www.joomlaworks.net
- * @copyright  Copyright (c) 2006 - 2022 JoomlaWorks Ltd. All rights reserved.
+ * @copyright  Copyright (c) 2006 - 2020 JoomlaWorks Ltd. All rights reserved.
  * @license    GNU/GPL license: https://www.gnu.org/copyleft/gpl.html
  */
 
@@ -84,9 +84,11 @@ class K2ViewItemlist extends K2View
         }
         if ($document->getType() == 'json') {
             // Prepare JSON output
+            $response = new JObject();
+            unset($response->_errors);
+
+            $response->site = new stdClass();
             $uri = JURI::getInstance();
-            $response = new stdClass;
-            $response->site = new stdClass;
             $response->site->url = $uri->toString(array('scheme', 'host', 'port'));
             $response->site->name = (K2_JVERSION == '30') ? $config->get('sitename') : $config->getValue('config.sitename');
 
@@ -255,7 +257,8 @@ class K2ViewItemlist extends K2View
                         $prefix = 'cat';
 
                         // Prepare the JSON category object
-                        $row = new stdClass;
+                        $row = new JObject();
+                        unset($row->_errors);
                         $row->id = $category->id;
                         $row->alias = $category->alias;
                         $row->link = $category->link;
@@ -276,7 +279,8 @@ class K2ViewItemlist extends K2View
                 case 'tag':
                     // Prevent spammers from using the tag view
                     $tag = JRequest::getString('tag');
-                    $db->setQuery('SELECT id, name FROM #__k2_tags WHERE name = '.$db->quote($tag));
+                    //$db->setQuery('SELECT id, name FROM #__k2_tags WHERE name = '.$db->quote($tag));
+					$db->setQuery('SELECT id, name, tag_desc FROM #__k2_tags WHERE name = '.$db->quote($tag));
                     $tag = $db->loadObject();
                     if (!$tag || !$tag->id) {
                         jimport('joomla.filesystem.file');
@@ -292,12 +296,8 @@ class K2ViewItemlist extends K2View
                         }
 
                         if (!$tag || !$tag->id) {
-                            if ($document->getType() == 'feed' || $document->getType() == 'json') {
-                                $app->redirect(JUri::root());
-                            } else {
-                                JError::raiseError(410, JText::_('K2_NOT_FOUND'));
-                                return false;
-                            }
+                            JError::raiseError(404, JText::_('K2_NOT_FOUND'));
+                            return false;
                         }
                     }
 
@@ -312,12 +312,14 @@ class K2ViewItemlist extends K2View
 
                     // Set title
                     $this->assignRef('name', $tag->name);
-                    $title = $tag->name;
+					$title = $tag->name;
+					$tag_desc = $tag->tag_desc;
                     $page_title = $params->get('page_title');
                     if ($this->menuItemMatchesK2Entity('itemlist', 'tag', $tag->name) && !empty($page_title)) {
                         $title = $params->get('page_title');
                     }
                     $this->assignRef('title', $title);
+					$this->assignRef('tag_desc', $tag_desc);
 
                     // Link
                     $link = K2HelperRoute::getTagRoute($tag->name);
@@ -394,7 +396,8 @@ class K2ViewItemlist extends K2View
                         $prefix = 'user';
 
                         // Prepare the JSON user object
-                        $row = new stdClass;
+                        $row = new JObject();
+                        unset($row->_errors);
                         $row->name = $userObject->name;
                         $row->avatar = $userObject->avatar;
                         $row->profile = $userObject->profile;
@@ -615,25 +618,13 @@ class K2ViewItemlist extends K2View
             // --- Feed Output [start] ---
             if ($document->getType() == 'feed') {
                 $item = $itemModel->prepareFeedItem($items[$i]);
-
-                // Manipulate tag rendering in the feed URL
-                if (JRequest::getBool('tagsontitle', false) && !empty($item->tags) && count($item->tags)) {
-
-                    // Limit no. of rendered tags in the title (if set)
-                    $tagLimit = JRequest::getInt('taglimit', 0);
-                    if ($tagLimit && $tagLimit < count($item->tags)) {
-                        $item->tags = array_slice($item->tags, 0, $tagLimit);
-                    }
-
-                    // Append tags to the title
-                    $item->title = html_entity_decode($this->escape($item->title.' '.implode(' ', $item->tags)));
-                }
+                $item->title = html_entity_decode($this->escape($item->title));
 
                 $feedItem = new JFeedItem();
                 $feedItem->link = $item->link;
-                $feedItem->title = html_entity_decode($this->escape($item->title));
+                $feedItem->title = $item->title;
                 $feedItem->description = $item->description;
-                $feedItem->date = (isset($ordering) && $ordering == 'modified') ? $item->modified : $item->created;
+                $feedItem->date = $item->created;
                 $feedItem->category = $item->category->name;
                 $feedItem->author = $item->author->name;
                 if ($params->get('feedBogusEmail')) {
@@ -752,10 +743,10 @@ class K2ViewItemlist extends K2View
 
         // Pathway
         $pathway = $app->getPathWay();
-        if (!empty($menuActive)) {
-            if (!isset($menuActive->query['task'])) {
-                $menuActive->query['task'] = '';
-            }
+        if (!isset($menuActive->query['task'])) {
+            $menuActive->query['task'] = '';
+        }
+        if ($menuActive) {
             switch ($task) {
                 case 'category':
                     if ($menuActive->query['task'] != 'category' || $menuActive->query['id'] != JRequest::getInt('id')) {
@@ -918,7 +909,7 @@ class K2ViewItemlist extends K2View
 
                     // Set Twitter meta tags
                     if ($params->get('twitterMetatags', 1)) {
-                        $document->setMetaData('twitter:card', $params->get('twitterCardType', 'summary'));
+                        $document->setMetaData('twitter:card', 'summary');
                         if ($params->get('twitterUsername')) {
                             $document->setMetaData('twitter:site', '@'.$params->get('twitterUsername'));
                         }
@@ -973,10 +964,7 @@ class K2ViewItemlist extends K2View
                     $document->setTitle($metaTitle);
 
                     // Set meta description
-                    $metaDesc = JText::_('K2_TAG_VIEW_DEFAULT_METADESC').' \''.$tag->name.'\'';
-                    if ($document->getMetadata('description', '')) {
-                        $metaDesc .= ' - '.$document->getMetadata('description');
-                    }
+                    $metaDesc = $document->getMetadata('description');
 
                     if ($menuItemMatch && K2_JVERSION != '15') {
                         if ($params->get('menu-meta_description')) {
@@ -988,10 +976,7 @@ class K2ViewItemlist extends K2View
                     $document->setDescription(K2HelperUtilities::characterLimit($metaDesc, $params->get('metaDescLimit', 150)));
 
                     // Set meta keywords
-                    $metaKeywords = $tag->name;
-                    if ($document->getMetadata('keywords', '')) {
-                        $metaKeywords .= ', '.$document->getMetadata('keywords');
-                    }
+                    $metaKeywords = $document->getMetadata('keywords');
 
                     if ($menuItemMatch && K2_JVERSION != '15') {
                         if ($params->get('menu-meta_keywords')) {
@@ -1035,8 +1020,6 @@ class K2ViewItemlist extends K2View
                 case 'user':
                     $menuItemMatch = $this->menuItemMatchesK2Entity('itemlist', 'user', $userObject->name);
 
-                    $filteredUserName = filter_var($userObject->name, FILTER_SANITIZE_STRING);
-
                     // Set canonical link
                     $this->setCanonicalUrl($link);
 
@@ -1044,10 +1027,10 @@ class K2ViewItemlist extends K2View
                     if ($menuItemMatch) {
                         $page_title = $params->get('page_title');
                         if (empty($page_title)) {
-                            $params->set('page_title', $filteredUserName);
+                            $params->set('page_title', $userObject->name);
                         }
                     } else {
-                        $params->set('page_title', $filteredUserName);
+                        $params->set('page_title', $userObject->name);
                     }
 
                     if (K2_JVERSION != '15') {
@@ -1073,10 +1056,7 @@ class K2ViewItemlist extends K2View
                     $document->setTitle($metaTitle);
 
                     // Set meta description
-                    $metaDesc = JText::_('K2_USER_VIEW_DEFAULT_METADESC').' \''.$filteredUserName.'\'';
-                    if ($document->getMetadata('description', '')) {
-                        $metaDesc .= ' - '.$document->getMetadata('description');
-                    }
+                    $metaDesc = $document->getMetadata('description');
 
                     if (!empty($userObject->profile->description)) {
                         $metaDesc = filter_var($userObject->profile->description, FILTER_SANITIZE_STRING);
@@ -1105,6 +1085,11 @@ class K2ViewItemlist extends K2View
 
                     // Set meta robots & author
                     $metaRobots = (K2_JVERSION != '15') ? $document->getMetadata('robots') : '';
+                    $metaAuthor = '';
+
+                    if (!empty($userObject->name)) {
+                        $metaAuthor = filter_var($userObject->name, FILTER_SANITIZE_STRING); // additional filtering (just in case)
+                    }
 
                     if ($menuItemMatch && K2_JVERSION != '15') {
                         if ($params->get('robots')) {
@@ -1114,7 +1099,7 @@ class K2ViewItemlist extends K2View
 
                     $document->setMetadata('robots', $metaRobots);
 
-                    $metaAuthor = trim($filteredUserName);
+                    $metaAuthor = trim($metaAuthor);
                     if ($app->getCfg('MetaAuthor') == '1' && $metaAuthor) {
                         $document->setMetadata('author', $metaAuthor);
                     }
@@ -1143,7 +1128,7 @@ class K2ViewItemlist extends K2View
 
                     // Set Twitter meta tags
                     if ($params->get('twitterMetatags', 1)) {
-                        $document->setMetaData('twitter:card', $params->get('twitterCardType', 'summary'));
+                        $document->setMetaData('twitter:card', 'summary');
                         if ($params->get('twitterUsername')) {
                             $document->setMetaData('twitter:site', '@'.$params->get('twitterUsername'));
                         }
@@ -1228,7 +1213,7 @@ class K2ViewItemlist extends K2View
                         }
                     }
 
-                    $metaTitle = trim(preg_replace('/[^\p{L}\p{N}\s\-_]/u', '', html_entity_decode($params->get('page_title'))));
+                    $metaTitle = trim($params->get('page_title'));
                     $document->setTitle($metaTitle);
 
                     // Set meta description
