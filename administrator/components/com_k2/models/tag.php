@@ -1,9 +1,9 @@
 <?php
 /**
- * @version    2.11.x
+ * @version    2.10.x
  * @package    K2
  * @author     JoomlaWorks https://www.joomlaworks.net
- * @copyright  Copyright (c) 2006 - 2022 JoomlaWorks Ltd. All rights reserved.
+ * @copyright  Copyright (c) 2006 - 2020 JoomlaWorks Ltd. All rights reserved.
  * @license    GNU/GPL license: https://www.gnu.org/copyleft/gpl.html
  */
 
@@ -38,7 +38,7 @@ class K2ModelTag extends K2Model
             $app->enqueueMessage($row->getError(), 'error');
             $app->redirect('index.php?option=com_k2&view=tag&cid='.$row->id);
         }
-
+	$row->tag_desc = JRequest::getVar('tag_desc', '', 'post', 'string', 2);
         if (!$row->store()) {
             $app->enqueueMessage($row->getError(), 'error');
             $app->redirect('index.php?option=com_k2&view=tags');
@@ -80,11 +80,11 @@ class K2ModelTag extends K2Model
         $tag = str_replace('-', '', $tag);
         $tag = str_replace('.', '', $tag);
 
-        $response = new stdClass;
-        $response->name = $tag;
+        $response = new JObject;
+        $response->set('name', $tag);
 
         if (empty($tag)) {
-            $response->msg = JText::_('K2_YOU_NEED_TO_ENTER_A_TAG', true);
+            $response->set('msg', JText::_('K2_YOU_NEED_TO_ENTER_A_TAG', true));
             echo json_encode($response);
             $app->close();
         }
@@ -95,7 +95,7 @@ class K2ModelTag extends K2Model
         $result = $db->loadResult();
 
         if ($result > 0) {
-            $response->msg = JText::_('K2_TAG_ALREADY_EXISTS', true);
+            $response->set('msg', JText::_('K2_TAG_ALREADY_EXISTS', true));
             echo json_encode($response);
             $app->close();
         }
@@ -108,9 +108,9 @@ class K2ModelTag extends K2Model
         $cache = JFactory::getCache('com_k2');
         $cache->clean();
 
-        $response->id = $row->id;
-        $response->status = 'success';
-        $response->msg = JText::_('K2_TAG_ADDED_TO_AVAILABLE_TAGS_LIST', true);
+        $response->set('id', $row->id);
+        $response->set('status', 'success');
+        $response->set('msg', JText::_('K2_TAG_ADDED_TO_AVAILABLE_TAGS_LIST', true));
         echo json_encode($response);
 
         $app->close();
